@@ -150,8 +150,8 @@ spec:
     spec:
       containers:
       - name: bad-app
-        image: sample-app:nonexistent-tag
-        command: ["/bin/sh", "-c", "exit 1"]
+        image: busybox
+        command: ["/bin/sh", "-c", "echo 'Starting...'; sleep 5; echo 'Crashing!'; exit 1"]
         resources:
           requests:
             cpu: "50m"

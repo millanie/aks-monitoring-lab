@@ -16,7 +16,7 @@ if [[ -f /tmp/aks-monitoring-env.sh ]]; then
 else
   echo "⚠️  /tmp/aks-monitoring-env.sh not found."
   echo "   Run infra/setup-monitoring-infra.sh first, or set these variables:"
-  echo "   RESOURCE_GROUP, AMW_ID, AMW_NAME, LAW_ID, ACTION_GROUP_ID, GRAFANA_NAME"
+  echo "   RESOURCE_GROUP, ACR_NAME, ACR_LOGIN_SERVER, AMW_ID, AMW_NAME, LAW_ID, ACTION_GROUP_ID, GRAFANA_NAME"
   exit 1
 fi
 
@@ -31,16 +31,28 @@ echo "=============================================="
 echo " Deploying Monitoring Demo Resources"
 echo "=============================================="
 
-# ─── 1. Deploy Sample Application ──────────────────────────────────────────
+# ─── 1. Build & Push Sample App Image ──────────────────────────────────────
 echo ""
-echo "▶ [1/4] Deploying sample application to AKS..."
-kubectl apply -f "$ROOT_DIR/app/deployment.yaml"
-kubectl rollout status deployment/sample-app -n demo-app --timeout=120s
+echo "▶ [1/5] Building sample app image with ACR..."
+az acr build \
+  --registry "$ACR_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --image sample-app:latest \
+  "$ROOT_DIR/app/" \
+  --output none
+
+echo "  ✅ Image built: $ACR_LOGIN_SERVER/sample-app:latest"
+
+# ─── 2. Deploy Sample Application ──────────────────────────────────────────
+echo ""
+echo "▶ [2/5] Deploying sample application to AKS..."
+sed "s|ACR_LOGIN_SERVER_PLACEHOLDER|$ACR_LOGIN_SERVER|g" "$ROOT_DIR/app/deployment.yaml" | kubectl apply -f -
+kubectl rollout status deployment/sample-app -n demo-app --timeout=180s
 echo "  ✅ Sample app deployed."
 
 # ─── 2. Deploy Prometheus Alert Rules ──────────────────────────────────────
 echo ""
-echo "▶ [2/4] Deploying Prometheus Alert Rule Groups..."
+echo "▶ [3/5] Deploying Prometheus Alert Rule Groups..."
 az deployment group create \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$ROOT_DIR/monitoring/prometheus-rules/aks-prometheus-rules.json" \
@@ -58,7 +70,7 @@ echo "     - aks-app-alerts (HTTP Errors, Latency, Business Metrics)"
 
 # ─── 3. Deploy Azure Monitor Alert Rules ───────────────────────────────────
 echo ""
-echo "▶ [3/4] Deploying Azure Monitor Alert Rules..."
+echo "▶ [4/5] Deploying Azure Monitor Alert Rules..."
 az deployment group create \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$ROOT_DIR/monitoring/azure-alerts/azure-monitor-alerts.json" \
@@ -78,7 +90,7 @@ echo "     - alert-aks-cluster-health"
 
 # ─── 4. Import Grafana Dashboard ──────────────────────────────────────────
 echo ""
-echo "▶ [4/4] Importing Grafana Dashboard..."
+echo "▶ [5/5] Importing Grafana Dashboard..."
 az grafana dashboard create \
   --name "$GRAFANA_NAME" \
   --resource-group "$RESOURCE_GROUP" \

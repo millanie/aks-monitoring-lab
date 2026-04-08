@@ -2,7 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir flask prometheus_client gunicorn
+RUN pip install --no-cache-dir flask prometheus_client gunicorn && \
+    apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY app.py .
 

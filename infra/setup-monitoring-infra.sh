@@ -3,9 +3,10 @@ set -euo pipefail
 
 ###############################################################################
 # AKS Monitoring Infrastructure Setup
+# - Azure Container Registry (ACR)
 # - Azure Monitor Workspace (Managed Prometheus)
 # - Azure Managed Grafana
-# - AKS Cluster with monitoring enabled
+# - AKS Cluster with monitoring enabled + ACR attached
 # - Action Group for alert notifications
 ###############################################################################
 
@@ -13,6 +14,7 @@ set -euo pipefail
 RESOURCE_GROUP="${RESOURCE_GROUP:-rg-aks-monitoring-demo}"
 LOCATION="${LOCATION:-koreacentral}"
 AKS_CLUSTER_NAME="${AKS_CLUSTER_NAME:-aks-monitoring-demo}"
+ACR_NAME="${ACR_NAME:-acraksmonitoring$RANDOM}"
 AMW_NAME="${AMW_NAME:-amw-monitoring-demo}"
 GRAFANA_NAME="${GRAFANA_NAME:-grafana-monitoring-demo}"
 LOG_ANALYTICS_NAME="${LOG_ANALYTICS_NAME:-law-monitoring-demo}"
@@ -27,19 +29,36 @@ echo "=============================================="
 echo "Resource Group : $RESOURCE_GROUP"
 echo "Location       : $LOCATION"
 echo "AKS Cluster    : $AKS_CLUSTER_NAME"
+echo "ACR            : $ACR_NAME"
 echo "AMW            : $AMW_NAME"
 echo "Grafana        : $GRAFANA_NAME"
 echo ""
 
 # ─── 1. Resource Group ─────────────────────────────────────────────────────
-echo "▶ [1/7] Creating Resource Group..."
+echo "▶ [1/8] Creating Resource Group..."
 az group create \
   --name "$RESOURCE_GROUP" \
   --location "$LOCATION" \
   --output none
 
-# ─── 2. Log Analytics Workspace ────────────────────────────────────────────
-echo "▶ [2/7] Creating Log Analytics Workspace..."
+# ─── 2. Azure Container Registry ──────────────────────────────────────────
+echo "▶ [2/8] Creating Azure Container Registry..."
+az acr create \
+  --name "$ACR_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --sku Basic \
+  --output none
+
+ACR_LOGIN_SERVER=$(az acr show \
+  --name "$ACR_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --query loginServer -o tsv)
+
+echo "  ACR Login Server: $ACR_LOGIN_SERVER"
+
+# ─── 3. Log Analytics Workspace ────────────────────────────────────────────
+echo "▶ [3/8] Creating Log Analytics Workspace..."
 az monitor log-analytics workspace create \
   --resource-group "$RESOURCE_GROUP" \
   --workspace-name "$LOG_ANALYTICS_NAME" \
@@ -54,7 +73,7 @@ LAW_ID=$(az monitor log-analytics workspace show \
 echo "  Log Analytics Workspace ID: $LAW_ID"
 
 # ─── 3. Azure Monitor Workspace (Managed Prometheus) ──────────────────────
-echo "▶ [3/7] Creating Azure Monitor Workspace (Managed Prometheus)..."
+echo "▶ [4/8] Creating Azure Monitor Workspace (Managed Prometheus)..."
 az monitor account create \
   --name "$AMW_NAME" \
   --resource-group "$RESOURCE_GROUP" \
@@ -69,7 +88,7 @@ AMW_ID=$(az monitor account show \
 echo "  Azure Monitor Workspace ID: $AMW_ID"
 
 # ─── 4. Azure Managed Grafana ─────────────────────────────────────────────
-echo "▶ [4/7] Creating Azure Managed Grafana..."
+echo "▶ [5/8] Creating Azure Managed Grafana..."
 az grafana create \
   --name "$GRAFANA_NAME" \
   --resource-group "$RESOURCE_GROUP" \
@@ -102,7 +121,7 @@ az grafana data-source create \
   }' --output none 2>/dev/null || echo "  (Datasource may be auto-linked via AKS integration)"
 
 # ─── 5. AKS Cluster with Monitoring ───────────────────────────────────────
-echo "▶ [5/7] Creating AKS Cluster with Monitoring enabled..."
+echo "▶ [6/8] Creating AKS Cluster with Monitoring enabled..."
 az aks create \
   --name "$AKS_CLUSTER_NAME" \
   --resource-group "$RESOURCE_GROUP" \
@@ -120,9 +139,10 @@ az aks create \
   --enable-addons monitoring \
   --workspace-resource-id "$LAW_ID" \
   --grafana-resource-id "$GRAFANA_ID" \
+  --attach-acr "$ACR_NAME" \
   --output none
 
-echo "  AKS Cluster created with Managed Prometheus & Grafana linked."
+echo "  AKS Cluster created with Managed Prometheus, Grafana & ACR linked."
 
 # Get credentials
 az aks get-credentials \
@@ -131,7 +151,7 @@ az aks get-credentials \
   --overwrite-existing
 
 # ─── 6. Action Group ──────────────────────────────────────────────────────
-echo "▶ [6/7] Creating Action Group for Alerts..."
+echo "▶ [7/8] Creating Action Group for Alerts..."
 az monitor action-group create \
   --name "$ACTION_GROUP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
@@ -147,7 +167,7 @@ ACTION_GROUP_ID=$(az monitor action-group show \
 echo "  Action Group ID: $ACTION_GROUP_ID"
 
 # ─── 7. Verify ────────────────────────────────────────────────────────────
-echo "▶ [7/7] Verifying deployment..."
+echo "▶ [8/8] Verifying deployment..."
 
 echo ""
 echo "  Checking ama-metrics pods in kube-system..."
@@ -174,6 +194,8 @@ echo ""
 cat > /tmp/aks-monitoring-env.sh <<EOF
 export RESOURCE_GROUP="$RESOURCE_GROUP"
 export AKS_CLUSTER_NAME="$AKS_CLUSTER_NAME"
+export ACR_NAME="$ACR_NAME"
+export ACR_LOGIN_SERVER="$ACR_LOGIN_SERVER"
 export AMW_ID="$AMW_ID"
 export AMW_NAME="$AMW_NAME"
 export GRAFANA_ID="$GRAFANA_ID"

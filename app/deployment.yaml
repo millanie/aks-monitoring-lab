@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
         - name: sample-app
-          image: sample-app:latest # 실제 ACR 이미지로 교체
+          image: ACR_LOGIN_SERVER_PLACEHOLDER/sample-app:latest
           ports:
             - containerPort: 8080
               name: http
