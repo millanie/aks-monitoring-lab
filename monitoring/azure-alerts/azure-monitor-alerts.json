@@ -217,7 +217,7 @@
       "name": "alert-aks-cluster-health",
       "location": "global",
       "properties": {
-        "description": "AKS 클러스터 API 서버 가용성 모니터링",
+        "description": "AKS 클러스터 노드 CPU 사용률이 80%를 초과하면 알림을 트리거합니다.",
         "severity": 1,
         "enabled": true,
         "evaluationFrequency": "PT1M",
@@ -227,11 +227,11 @@
           "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
           "allOf": [
             {
-              "name": "APIServerAvailability",
-              "metricName": "apiserver_request_total",
+              "name": "NodeCPUHigh",
+              "metricName": "node_cpu_usage_percentage",
               "metricNamespace": "Microsoft.ContainerService/managedClusters",
-              "operator": "LessThan",
-              "threshold": 99,
+              "operator": "GreaterThan",
+              "threshold": 80,
               "timeAggregation": "Average",
               "criterionType": "StaticThresholdCriterion"
             }
