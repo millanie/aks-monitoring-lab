@@ -112,13 +112,41 @@ AKS Pod 메트릭 → ama-metrics → Azure Monitor Workspace (Managed Prometheu
 |------|----------|----------|
 | Azure CLI | 2.60+ | `az version` |
 | kubectl | 1.28+ | `kubectl version --client` |
+| kubelogin | 0.2+ | `kubelogin --version` |
 | Azure 구독 | - | `az account show` |
 | Bash | 4.0+ | `bash --version` |
 
+### kubectl / kubelogin 설치
+
+kubectl이 설치되어 있지 않다면 Azure CLI를 통해 설치할 수 있습니다:
+
 ```bash
-# 필요한 Azure CLI 확장 설치
+# 시스템 전역 설치 (sudo 권한 필요)
+sudo az aks install-cli
+
+# 또는 사용자 로컬 설치 (sudo 없이)
+mkdir -p ~/.local/bin
+az aks install-cli \
+  --install-location ~/.local/bin/kubectl \
+  --kubelogin-install-location ~/.local/bin/kubelogin
+
+# PATH에 추가 (영구 적용)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Azure CLI 확장 설치
+
+```bash
 az extension add --name amg          # Managed Grafana
 az extension add --name aks-preview  # AKS preview features
+```
+
+### Azure 로그인 및 구독 설정
+
+```bash
+az login
+az account set --subscription "<구독 ID>"
 ```
 
 ---

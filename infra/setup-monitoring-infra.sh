@@ -19,7 +19,7 @@ LOG_ANALYTICS_NAME="${LOG_ANALYTICS_NAME:-law-monitoring-demo}"
 ACTION_GROUP_NAME="${ACTION_GROUP_NAME:-ag-aks-monitoring}"
 ALERT_EMAIL="${ALERT_EMAIL:-admin@example.com}"
 NODE_COUNT="${NODE_COUNT:-3}"
-K8S_VERSION="${K8S_VERSION:-1.30}"
+K8S_VERSION="${K8S_VERSION:-1.34}"
 
 echo "=============================================="
 echo " AKS Monitoring Demo - Infrastructure Setup"
@@ -108,7 +108,7 @@ az aks create \
   --resource-group "$RESOURCE_GROUP" \
   --location "$LOCATION" \
   --node-count "$NODE_COUNT" \
-  --zones 1 2 3 \
+  --zones 2 3 \
   --network-plugin azure \
   --network-plugin-mode overlay \
   --kubernetes-version "$K8S_VERSION" \
