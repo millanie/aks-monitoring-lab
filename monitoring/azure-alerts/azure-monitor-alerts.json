@@ -1,0 +1,248 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Azure Monitor Alert Rules (Log-based & Metric-based) for AKS monitoring demo"
+  },
+  "parameters": {
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics Workspace resource ID"
+      }
+    },
+    "aksClusterResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "AKS cluster resource ID"
+      }
+    },
+    "actionGroupId": {
+      "type": "string",
+      "metadata": {
+        "description": "Action Group resource ID"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-container-restart-anomaly",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[Container Insights] 비정상 컨테이너 재시작 감지",
+        "description": "Container Insights 로그에서 비정상적으로 많은 컨테이너 재시작을 감지합니다.",
+        "severity": 2,
+        "enabled": true,
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "scopes": ["[parameters('logAnalyticsWorkspaceId')]"],
+        "criteria": {
+          "allOf": [
+            {
+              "query": "KubePodInventory\n| where ClusterName == 'aks-monitoring-demo'\n| where PodRestartCount > 5\n| summarize RestartCount = max(PodRestartCount) by PodName = Name, Namespace, ContainerName, Computer\n| where RestartCount > 5",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "dimensions": [
+                {
+                  "name": "PodName",
+                  "operator": "Include",
+                  "values": ["*"]
+                },
+                {
+                  "name": "Namespace",
+                  "operator": "Include",
+                  "values": ["*"]
+                }
+              ],
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 1,
+                "minFailingPeriodsToAlert": 1
+              }
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": ["[parameters('actionGroupId')]"],
+          "customProperties": {
+            "alert_source": "container-insights",
+            "team": "platform"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-oom-killed-pods",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[Container Insights] OOMKilled Pod 감지",
+        "description": "OOMKilled로 종료된 컨테이너를 감지합니다. 메모리 리소스 limit 조정이 필요합니다.",
+        "severity": 2,
+        "enabled": true,
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "scopes": ["[parameters('logAnalyticsWorkspaceId')]"],
+        "criteria": {
+          "allOf": [
+            {
+              "query": "KubeEvents\n| where ClusterName == 'aks-monitoring-demo'\n| where Reason == 'OOMKilling'\n| project TimeGenerated, Name, Namespace, Message\n| summarize OOMCount = count() by Name, Namespace, bin(TimeGenerated, 5m)",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "dimensions": [
+                {
+                  "name": "Name",
+                  "operator": "Include",
+                  "values": ["*"]
+                },
+                {
+                  "name": "Namespace",
+                  "operator": "Include",
+                  "values": ["*"]
+                }
+              ],
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 1,
+                "minFailingPeriodsToAlert": 1
+              }
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": ["[parameters('actionGroupId')]"],
+          "customProperties": {
+            "alert_source": "container-insights",
+            "team": "app"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-failed-pod-scheduling",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[Container Insights] Pod 스케줄링 실패 감지",
+        "description": "리소스 부족 또는 노드 조건으로 인한 Pod 스케줄링 실패를 감지합니다.",
+        "severity": 3,
+        "enabled": true,
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "scopes": ["[parameters('logAnalyticsWorkspaceId')]"],
+        "criteria": {
+          "allOf": [
+            {
+              "query": "KubeEvents\n| where ClusterName == 'aks-monitoring-demo'\n| where Reason == 'FailedScheduling'\n| project TimeGenerated, Name, Namespace, Message\n| summarize FailCount = count() by Name, Namespace, bin(TimeGenerated, 5m)\n| where FailCount > 0",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "dimensions": [
+                {
+                  "name": "Namespace",
+                  "operator": "Include",
+                  "values": ["*"]
+                }
+              ],
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 2,
+                "minFailingPeriodsToAlert": 2
+              }
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": ["[parameters('actionGroupId')]"],
+          "customProperties": {
+            "alert_source": "container-insights",
+            "team": "platform"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-node-cpu-high",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[Container Insights] 노드 CPU 사용률 과다",
+        "description": "Container Insights 로그 기반 노드 CPU 알림. Prometheus 규칙과 보완 관계.",
+        "severity": 3,
+        "enabled": true,
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT30M",
+        "scopes": ["[parameters('logAnalyticsWorkspaceId')]"],
+        "criteria": {
+          "allOf": [
+            {
+              "query": "Perf\n| where ObjectName == 'K8SNode'\n| where CounterName == 'cpuUsageNanoCores'\n| summarize AvgCPU = avg(CounterValue) by Computer, bin(TimeGenerated, 5m)\n| where AvgCPU > 800000000",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "dimensions": [
+                {
+                  "name": "Computer",
+                  "operator": "Include",
+                  "values": ["*"]
+                }
+              ],
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 3,
+                "minFailingPeriodsToAlert": 2
+              }
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": ["[parameters('actionGroupId')]"],
+          "customProperties": {
+            "alert_source": "container-insights",
+            "team": "platform"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "alert-aks-cluster-health",
+      "location": "global",
+      "properties": {
+        "description": "AKS 클러스터 API 서버 가용성 모니터링",
+        "severity": 1,
+        "enabled": true,
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "scopes": ["[parameters('aksClusterResourceId')]"],
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "APIServerAvailability",
+              "metricName": "apiserver_request_total",
+              "metricNamespace": "Microsoft.ContainerService/managedClusters",
+              "operator": "LessThan",
+              "threshold": 99,
+              "timeAggregation": "Average",
+              "criterionType": "StaticThresholdCriterion"
+            }
+          ]
+        },
+        "actions": [
+          {
+            "actionGroupId": "[parameters('actionGroupId')]"
+          }
+        ]
+      }
+    }
+  ]
+}
