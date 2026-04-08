@@ -79,7 +79,7 @@ spec:
     app: sample-app
 ---
 # PodMonitor: Managed Prometheus가 커스텀 메트릭을 스크래핑하도록 명시적 설정
-apiVersion: monitoring.coreos.com/v1
+apiVersion: azmonitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: sample-app-monitor
