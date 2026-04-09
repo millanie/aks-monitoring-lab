@@ -44,6 +44,15 @@
             },
             "queryType": 1,
             "value": null
+          },
+          {
+            "id": "param-selectedtab",
+            "version": "KqlParameterItem/1.0",
+            "name": "selectedTab",
+            "type": 1,
+            "isRequired": false,
+            "isHiddenWhenLocked": true,
+            "value": "overview"
           }
         ],
         "style": "pills",
@@ -64,7 +73,9 @@
             "linkTarget": "parameter",
             "linkLabel": "📋 개요 (Overview)",
             "subTarget": "overview",
-            "style": "link"
+            "preText": "overview",
+            "style": "link",
+            "isDefault": true
           },
           {
             "id": "tab-rules",
@@ -103,7 +114,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Alert Rule이 별도 메뉴에서 관리되는 이유\n\nAKS 모니터링의 Alert Rule은 **3가지 서로 다른 Azure Resource Provider**에 의해 관리됩니다.\n각각의 데이터 소스와 평가 엔진이 다르기 때문입니다.\n\n| 유형 | Azure Resource Type | 데이터 소스 | Portal 위치 |\n|------|--------------------|-----------|-----------|\n| **Prometheus** | `prometheusRuleGroups` | Azure Monitor Workspace (PromQL) | Monitor → Prometheus rule groups |\n| **Log Query** | `scheduledQueryRules` | Log Analytics Workspace (KQL) | Monitor → Alert rules |\n| **Metric** | `metricAlerts` | ARM Platform Metrics | Monitor → Alert rules |\n\n---\n\n### 왜 분리되어 있는가?\n\n1. **데이터 소스가 다르다** — Prometheus(시계열), Log Analytics(로그), ARM Metrics(플랫폼)\n2. **평가 엔진이 다르다** — PromQL 엔진, KQL 엔진, ARM Metrics Pipeline\n3. **Portal이 Resource Type 기반** — 서로 다른 Resource Provider이므로 자연스럽게 다른 메뉴에 표시\n\n> ✅ 하지만 **발생한 Alert(Fired Alert)** 은 `Monitor → Alerts` 에서 **유형 무관하게 한 화면**으로 볼 수 있습니다.\n>\n> ⚠️ **Alert Rule(규칙 정의)** 을 한 화면에서 보려면 이 Workbook의 **Alert Rules 탭**을 사용하세요."
+              "json": "## Alert Rule이 별도 메뉴에서 관리되는 이유\n\nAKS 모니터링의 Alert Rule은 **4가지 서로 다른 Azure Resource Provider**에 의해 관리됩니다.\n각각의 데이터 소스와 평가 엔진이 다르기 때문입니다.\n\n| 유형 | Azure Resource Type | 데이터 소스 | Portal 위치 |\n|------|--------------------|-----------|-----------|\n| **Prometheus** | `prometheusRuleGroups` | Azure Monitor Workspace (PromQL) | Monitor → Prometheus rule groups |\n| **Log Query** | `scheduledQueryRules` | Log Analytics Workspace (KQL) | Monitor → Alert rules |\n| **Metric** | `metricAlerts` | ARM Platform Metrics | Monitor → Alert rules |\n| **Smart Detector** | `smartDetectorAlertRules` | Application Insights (AI/ML) | Monitor → Alert rules |\n\n---\n\n### 왜 분리되어 있는가?\n\n1. **데이터 소스가 다르다** — Prometheus(시계열), Log Analytics(로그), ARM Metrics(플랫폼), App Insights(AI 기반)\n2. **평가 엔진이 다르다** — PromQL 엔진, KQL 엔진, ARM Metrics Pipeline, Smart Detection AI\n3. **Portal이 Resource Type 기반** — 서로 다른 Resource Provider이므로 자연스럽게 다른 메뉴에 표시\n\n> ✅ 하지만 **발생한 Alert(Fired Alert)** 은 `Monitor → Alerts` 에서 **유형 무관하게 한 화면**으로 볼 수 있습니다.\n>\n> ⚠️ **Alert Rule(규칙 정의)** 을 한 화면에서 보려면 이 Workbook의 **Alert Rules 탭**을 사용하세요."
             },
             "name": "overview-text"
           },
@@ -118,7 +129,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize Rules = sum(ruleCount) by alertType",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize Rules = sum(ruleCount) by alertType",
               "size": 3,
               "title": "Alert Rule 유형별 분포 (Distribution by Type)",
               "queryType": 1,
@@ -131,7 +142,8 @@
                 "seriesLabelSettings": [
                   { "seriesName": "Prometheus", "color": "orange" },
                   { "seriesName": "LogQuery", "color": "blue" },
-                  { "seriesName": "Metric", "color": "green" }
+                  { "seriesName": "Metric", "color": "green" },
+                  { "seriesName": "SmartDetector", "color": "purple" }
                 ]
               }
             },
@@ -142,7 +154,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    'Unknown'\n  )\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend severity = toint(coalesce(rule.severity, properties.severity))\n| extend sevLabel = case(\n    severity == 0, 'Sev 0 - Critical',\n    severity == 1, 'Sev 1 - Error',\n    severity == 2, 'Sev 2 - Warning',\n    severity == 3, 'Sev 3 - Informational',\n    severity == 4, 'Sev 4 - Verbose',\n    strcat('Sev ', tostring(severity))\n  )\n| summarize Count = count() by sevLabel\n| order by sevLabel asc",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend severity = toint(coalesce(rule.severity, properties.severity))\n| extend sevLabel = case(\n    severity == 0, 'Sev 0 - Critical',\n    severity == 1, 'Sev 1 - Error',\n    severity == 2, 'Sev 2 - Warning',\n    severity == 3, 'Sev 3 - Informational',\n    severity == 4, 'Sev 4 - Verbose',\n    strcat('Sev ', tostring(severity))\n  )\n| summarize Count = count() by sevLabel\n| order by sevLabel asc",
               "size": 3,
               "title": "Alert Rule Severity 분포 (Distribution by Severity)",
               "queryType": 1,
@@ -190,7 +202,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize\n    Groups = count(),\n    Rules = sum(ruleCount)\n  by alertType\n| order by alertType asc",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize\n    Groups = count(),\n    Rules = sum(ruleCount)\n  by alertType\n| order by alertType asc",
               "size": 4,
               "title": "유형별 요약 (Summary by Type)",
               "queryType": 1,
@@ -241,7 +253,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    'Unknown'\n  )\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend ruleName = case(\n    alertType == 'Prometheus', tostring(rule.alert),\n    alertType == 'LogQuery',   coalesce(tostring(properties.displayName), name),\n    alertType == 'Metric',     name,\n    name\n  )\n| extend severity = toint(coalesce(rule.severity, properties.severity))\n| extend sevLabel = case(\n    severity == 0, '🔴 Sev 0',\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    severity == 4, '⚪ Sev 4',\n    strcat('Sev ', tostring(severity))\n  )\n| extend ruleGroup = name\n| extend expression = case(\n    alertType == 'Prometheus', tostring(rule.expression),\n    alertType == 'LogQuery',   tostring(properties.criteria.allOf[0].query),\n    alertType == 'Metric',     tostring(properties.criteria.allOf[0].metricName),\n    ''\n  )\n| extend forDuration = case(\n    alertType == 'Prometheus', tostring(rule['for']),\n    alertType == 'LogQuery',   tostring(properties.evaluationFrequency),\n    alertType == 'Metric',     tostring(properties.evaluationFrequency),\n    ''\n  )\n| extend category = case(\n    alertType == 'Prometheus', tostring(rule.labels.category),\n    alertType == 'LogQuery',   tostring(properties.actions.customProperties.alert_source),\n    alertType == 'Metric',     'platform',\n    ''\n  )\n| project\n    ['Alert Rule'] = ruleName,\n    ['Type'] = alertType,\n    ['Severity'] = sevLabel,\n    ['Category'] = category,\n    ['Group/Resource'] = ruleGroup,\n    ['For/Frequency'] = forDuration,\n    ['Expression/Query'] = expression\n| order by ['Type'] asc, ['Severity'] asc",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend ruleName = case(\n    alertType == 'Prometheus', tostring(rule.alert),\n    alertType == 'LogQuery',   coalesce(tostring(properties.displayName), name),\n    alertType == 'Metric',     name,\n    alertType == 'SmartDetector', coalesce(tostring(properties.displayName), name),\n    name\n  )\n| extend severity = toint(coalesce(rule.severity, properties.severity))\n| extend sevLabel = case(\n    severity == 0, '🔴 Sev 0',\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    severity == 4, '⚪ Sev 4',\n    strcat('Sev ', tostring(severity))\n  )\n| extend ruleGroup = name\n| extend expression = case(\n    alertType == 'Prometheus', tostring(rule.expression),\n    alertType == 'LogQuery',   tostring(properties.criteria.allOf[0].query),\n    alertType == 'Metric',     tostring(properties.criteria.allOf[0].metricName),\n    alertType == 'SmartDetector', tostring(properties.detector.id),\n    ''\n  )\n| extend forDuration = case(\n    alertType == 'Prometheus', tostring(rule['for']),\n    alertType == 'LogQuery',   tostring(properties.evaluationFrequency),\n    alertType == 'Metric',     tostring(properties.evaluationFrequency),\n    alertType == 'SmartDetector', tostring(properties.frequency),\n    ''\n  )\n| extend category = case(\n    alertType == 'Prometheus', tostring(rule.labels.category),\n    alertType == 'LogQuery',   tostring(properties.actions.customProperties.alert_source),\n    alertType == 'Metric',     'platform',\n    alertType == 'SmartDetector', 'smart-detection',\n    ''\n  )\n| project\n    ['Alert Rule'] = ruleName,\n    ['Type'] = alertType,\n    ['Severity'] = sevLabel,\n    ['Category'] = category,\n    ['Group/Resource'] = ruleGroup,\n    ['For/Frequency'] = forDuration,\n    ['Expression/Query'] = expression\n| order by ['Type'] asc, ['Severity'] asc",
               "size": 0,
               "showAnalytics": true,
               "title": "Alert Rules (Prometheus + Log Query + Metric)",
@@ -263,6 +275,7 @@
                         { "operator": "==", "thresholdValue": "Prometheus", "representation": "orange", "text": "{0}" },
                         { "operator": "==", "thresholdValue": "LogQuery", "representation": "blue", "text": "{0}" },
                         { "operator": "==", "thresholdValue": "Metric", "representation": "green", "text": "{0}" },
+                        { "operator": "==", "thresholdValue": "SmartDetector", "representation": "purple", "text": "{0}" },
                         { "operator": "Default", "representation": "gray", "text": "{0}" }
                       ]
                     }
@@ -301,7 +314,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    'Unknown'\n  )\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend severity = toint(coalesce(rule.severity, properties.severity))\n| extend sevLabel = case(\n    severity == 0, 'Sev 0',\n    severity == 1, 'Sev 1',\n    severity == 2, 'Sev 2',\n    severity == 3, 'Sev 3',\n    severity == 4, 'Sev 4',\n    strcat('Sev ', tostring(severity))\n  )\n| summarize Count = count() by alertType, sevLabel\n| order by alertType asc, sevLabel asc",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend severity = toint(coalesce(rule.severity, properties.severity))\n| extend sevLabel = case(\n    severity == 0, 'Sev 0',\n    severity == 1, 'Sev 1',\n    severity == 2, 'Sev 2',\n    severity == 3, 'Sev 3',\n    severity == 4, 'Sev 4',\n    strcat('Sev ', tostring(severity))\n  )\n| summarize Count = count() by alertType, sevLabel\n| order by alertType asc, sevLabel asc",
               "size": 0,
               "title": "유형 × Severity 히트맵 (Type × Severity Matrix)",
               "queryType": 1,
@@ -422,6 +435,7 @@
                         { "operator": "contains", "thresholdValue": "Prometheus", "representation": "orange", "text": "{0}" },
                         { "operator": "contains", "thresholdValue": "Log", "representation": "blue", "text": "{0}" },
                         { "operator": "contains", "thresholdValue": "Metric", "representation": "green", "text": "{0}" },
+                        { "operator": "contains", "thresholdValue": "Smart", "representation": "purple", "text": "{0}" },
                         { "operator": "Default", "representation": "gray", "text": "{0}" }
                       ]
                     }

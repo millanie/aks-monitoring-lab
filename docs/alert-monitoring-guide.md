@@ -7,12 +7,12 @@
 
 ## 1. 개요 (Overview)
 
-AKS 모니터링 환경에서는 알림(Alert)이 **세 가지 서로 다른 리소스 타입**으로 관리됩니다.
+AKS 모니터링 환경에서는 알림(Alert)이 **네 가지 서로 다른 리소스 타입**으로 관리됩니다.
 이 문서는 각 알림 유형의 특성과 확인 방법을 설명하고,
 **"발생한 알림(Fired Alert)"은 한 화면에서 볼 수 있지만 "알림 규칙(Alert Rule)"은 별도 메뉴에서 관리해야 하는 이유**를 안내합니다.
 마지막으로, 알림 규칙을 하나의 화면에서 조회하기 위한 대안을 제시합니다.
 
-In an AKS monitoring environment, alerts are managed across **three distinct resource types**.
+In an AKS monitoring environment, alerts are managed across **four distinct resource types**.
 This guide explains the characteristics of each alert type, why **fired alerts** are viewable in a single pane while **alert rules** require separate navigation, and presents alternatives for unified alert rule visibility.
 
 ---
@@ -82,9 +82,9 @@ This guide explains the characteristics of each alert type, why **fired alerts**
 
 ## 3. Alert Rule이 별도 메뉴에서 관리되는 이유 (Why Alert Rules Live in Separate Menus)
 
-### 3가지 Alert Rule 리소스 타입
+### 4가지 Alert Rule 리소스 타입
 
-Azure에서 AKS 관련 알림 규칙은 세 가지 **서로 다른 Azure Resource Provider** 에 의해 관리됩니다.
+Azure에서 AKS 관련 알림 규칙은 네 가지 **서로 다른 Azure Resource Provider** 에 의해 관리됩니다.
 이는 Azure 플랫폼의 설계에 기인하며, 각각의 데이터 소스와 평가 엔진이 다르기 때문입니다.
 
 | 유형 (Type) | Azure Resource Type | 데이터 소스 (Data Source) | 관리 위치 (Portal Location) |
@@ -92,6 +92,7 @@ Azure에서 AKS 관련 알림 규칙은 세 가지 **서로 다른 Azure Resourc
 | **Prometheus Alert** | `Microsoft.AlertsManagement/`<br>`prometheusRuleGroups` | Azure Monitor Workspace<br>(Managed Prometheus) | Azure Monitor → **Prometheus rule groups** |
 | **Log Query Alert** | `Microsoft.Insights/`<br>`scheduledQueryRules` | Log Analytics Workspace<br>(Container Insights, KQL) | Azure Monitor → **Alert rules** |
 | **Metric Alert** | `Microsoft.Insights/`<br>`metricAlerts` | AKS Platform Metrics<br>(ARM metric namespace) | Azure Monitor → **Alert rules** |
+| **Smart Detector** | `Microsoft.AlertsManagement/`<br>`smartDetectorAlertRules` | Application Insights<br>(AI/ML 기반 이상 탐지) | Azure Monitor → **Alert rules** |
 
 ### 왜 분리되어 있는가? (Why Are They Separated?)
 
@@ -201,7 +202,8 @@ resources
 | where type in~ (
     'microsoft.alertsmanagement/prometheusrulegroups',
     'microsoft.insights/scheduledqueryrules',
-    'microsoft.insights/metricalerts'
+    'microsoft.insights/metricalerts',
+    'microsoft.alertsmanagement/smartdetectoralertrules'
   )
 // (선택) 특정 리소스 그룹으로 범위 한정 — 다른 RG의 rule 제외
 | where resourceGroup =~ 'rg-aks-monitoring-demo'
@@ -243,7 +245,8 @@ resources
 | where type in~ (
     'microsoft.alertsmanagement/prometheusrulegroups',
     'microsoft.insights/scheduledqueryrules',
-    'microsoft.insights/metricalerts'
+    'microsoft.insights/metricalerts',
+    'microsoft.alertsmanagement/smartdetectoralertrules'
   )
 | where resourceGroup =~ 'rg-aks-monitoring-demo'
 | extend alertType = case(
@@ -259,6 +262,7 @@ resources
     alertType == 'Prometheus', tostring(rule.alert),
     alertType == 'LogQuery',   coalesce(tostring(properties.displayName), name),
     alertType == 'Metric',     name,
+    alertType == 'SmartDetector', coalesce(tostring(properties.displayName), name),
     name
   )
 | extend severity    = toint(coalesce(rule.severity, properties.severity))
@@ -266,6 +270,7 @@ resources
     alertType == 'Prometheus', tostring(rule.expression),
     alertType == 'LogQuery',   tostring(properties.criteria.allOf[0].query),
     alertType == 'Metric',     tostring(properties.criteria.allOf[0].metricName),
+    alertType == 'SmartDetector', tostring(properties.detector.id),
     ''
   )
 | project ruleName, alertType, severity, name, resourceGroup, expression
@@ -282,12 +287,14 @@ az graph query -q "resources \
   | where type in~ ( \
       'microsoft.alertsmanagement/prometheusrulegroups', \
       'microsoft.insights/scheduledqueryrules', \
-      'microsoft.insights/metricalerts') \
+      'microsoft.insights/metricalerts', \
+      'microsoft.alertsmanagement/smartdetectoralertrules') \
   | where resourceGroup =~ 'rg-aks-monitoring-demo' \
   | extend alertType = case( \
       type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus', \
       type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery', \
-      type =~ 'microsoft.insights/metricalerts', 'Metric', 'Unknown') \
+      type =~ 'microsoft.insights/metricalerts', 'Metric', \
+      type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector', 'Unknown') \
   | where alertType != 'Prometheus' \
       or isnotnull(properties.rules[0].alert) \
   | extend severity = case( \
