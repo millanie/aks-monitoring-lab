@@ -14,7 +14,11 @@ AKS 클러스터에서 수집되는 메트릭과 로그를 **Azure Managed Prome
 **Azure Managed Grafana** 대시보드로 시각화하며, **Azure Monitor Alert** 로 중앙에서 알림을 관리하는
 End-to-End 모니터링 파이프라인 데모입니다.
 
-**5가지 장애 시나리오** 를 재현하여 알림이 정상적으로 발생하고 전달되는지 검증할 수 있습니다.
+**5가지 장애 시나리오** 를 재현하여 알림이 정상적으로 발생하고 전달되는지 검증할 수 있으며,
+**Azure Monitor Workbook** 을 통해 4가지 Alert 타입(Prometheus / Log Query / Metric / Smart Detector)을
+하나의 대시보드에서 통합 조회할 수 있습니다.
+
+> 📖 상세 가이드: [monitoring/alert-monitoring-guide.md](monitoring/alert-monitoring-guide.md)
 
 ---
 
@@ -75,11 +79,14 @@ AKS Pod 메트릭 → ama-metrics → Azure Monitor Workspace (Managed Prometheu
 │   ├── Dockerfile                              # 컨테이너 이미지 빌드
 │   └── deployment.yaml                         # K8s 매니페스트 (Deployment, Service, PodMonitor, Scrape Config)
 │
-├── monitoring/                                 📊 모니터링 규칙 & 대시보드
+├── monitoring/                                 📊 모니터링 규칙 & 대시보드 & 가이드
+│   ├── alert-monitoring-guide.md               # Alert 통합 모니터링 가이드 (4가지 Alert 타입, Workbook 설명)
 │   ├── prometheus-rules/
 │   │   └── aks-prometheus-rules.json           # Prometheus Rule Groups (ARM 템플릿, 3그룹 12규칙)
 │   ├── azure-alerts/
 │   │   └── azure-monitor-alerts.json           # Azure Monitor Alert Rules (ARM 템플릿, 5규칙)
+│   ├── workbooks/
+│   │   └── aks-alert-monitoring-workbook.json  # Azure Monitor Workbook (Alert 통합 조회 대시보드)
 │   └── grafana-dashboards/
 │       └── aks-overview.json                   # Grafana 대시보드 JSON (4섹션: 클러스터/노드/앱/비즈니스)
 │
@@ -99,6 +106,8 @@ AKS Pod 메트릭 → ama-metrics → Azure Monitor Workspace (Managed Prometheu
 | **`infra/setup-monitoring-infra.sh`** | Resource Group, Log Analytics Workspace, Azure Monitor Workspace(Managed Prometheus), Managed Grafana, AKS 클러스터(모니터링 연동), Action Group을 순차 생성합니다. 생성된 리소스 ID를 `/tmp/aks-monitoring-env.sh`로 export합니다. |
 | **`app/app.py`** | Prometheus `Counter`, `Histogram`, `Gauge` 메트릭을 노출하는 Flask 앱. `/api/order`(주문 처리), `/api/error`(에러 발생), `/api/toggle-errors`(에러 주입 ON/OFF), `/api/memory-leak`(메모리 누수 시뮬레이션) 등의 엔드포인트를 제공합니다. |
 | **`app/deployment.yaml`** | Deployment(3 replicas) + Service + PodMonitor + `ama-metrics-prometheus-config` ConfigMap을 포함합니다. `prometheus.io/scrape` 어노테이션과 PodMonitor 두 가지 방식으로 메트릭 수집을 설정합니다. |
+| **`monitoring/alert-monitoring-guide.md`** | Alert 통합 모니터링 가이드. 4가지 Alert 리소스 타입(Prometheus/LogQuery/Metric/SmartDetector) 설명, Resource Graph 통합 쿼리, Workbook 사용법을 다룹니다. |
+| **`monitoring/workbooks/`** | Azure Monitor Workbook 템플릿. 3개 탭(개요/Alert Rules/Fired Alerts)으로 구성, Resource Group 필터(All/개별 RG), 리소스 유형별 개별 테이블을 제공합니다. |
 | **`monitoring/prometheus-rules/`** | ARM 템플릿으로 3개 Prometheus Rule Group을 배포합니다: **aks-node-alerts** (CPU/Memory/Disk/NotReady), **aks-pod-alerts** (CrashLoop/OOM/Pending/Throttle), **aks-app-alerts** (HTTP에러율/레이턴시/비즈니스메트릭). |
 | **`monitoring/azure-alerts/`** | ARM 템플릿으로 5개 Azure Monitor Alert를 배포합니다: Container 재시작 이상, OOMKilled, 스케줄링 실패, 노드 CPU(KQL 기반), API서버 가용성(Metric 기반). |
 | **`monitoring/grafana-dashboards/`** | 4개 섹션(클러스터 개요, 노드 리소스, 앱 메트릭, 비즈니스 메트릭)으로 구성된 Grafana 대시보드 JSON. namespace/node 변수 템플릿 포함. |
@@ -222,6 +231,7 @@ source /tmp/aks-monitoring-env.sh
 |----------|-----------|
 | **Grafana 대시보드** | `$GRAFANA_URL` (setup 스크립트 출력 참조) |
 | **Azure Monitor Alerts** | Azure Portal → Monitor → Alerts |
+| **Alert 통합 Workbook** | Monitor → Workbooks → [Workbook 임포트](monitoring/workbooks/aks-alert-monitoring-workbook.json) |
 | **Prometheus 메트릭 쿼리** | Azure Portal → Monitor → Metrics → Prometheus 선택 |
 | **Pod 상태** | `kubectl get pods -n demo-app -w` |
 | **K8s 이벤트** | `kubectl get events -n demo-app --sort-by='.lastTimestamp'` |
@@ -342,6 +352,29 @@ az grafana dashboard import \
   --resource-group rg-aks-monitoring-demo \
   --definition @monitoring/grafana-dashboards/your-dashboard.json
 ```
+
+---
+
+## 📋 Alert 통합 Workbook
+
+4가지 Alert 리소스 타입을 **하나의 대시보드**에서 조회할 수 있는 Azure Monitor Workbook이 포함되어 있습니다.
+
+### 임포트 방법
+
+1. Azure Portal → **Monitor → Workbooks → New**
+2. **Advanced Editor** (`</>` 아이콘) 클릭
+3. `monitoring/workbooks/aks-alert-monitoring-workbook.json` 내용을 붙여넣기
+4. **Apply → Done Editing → Save**
+
+### Workbook 구성
+
+| 탭 | 내용 |
+|----|------|
+| **📋 개요** | 유형별/Severity별 원형 그래프 |
+| **📐 Alert Rules** | Prometheus / Log Query / Metric / Smart Detector 유형별 개별 테이블 |
+| **🔥 Fired Alerts** | 실시간 발생 알림 현황 |
+
+> 상단 **Resource Group** 드롭다운에서 `All` 선택 시 구독 전체, 특정 RG 선택 시 해당 RG만 조회합니다.
 
 ---
 
