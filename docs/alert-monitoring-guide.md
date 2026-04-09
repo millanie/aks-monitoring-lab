@@ -147,7 +147,7 @@ Azure에서 AKS 관련 알림 규칙은 네 가지 **서로 다른 Azure Resourc
 Azure Portal → Monitor → Alerts
 ```
 
-이 화면에서는 Prometheus Alert, Log Query Alert, Metric Alert 모두 **단일 리스트**로 표시됩니다.
+이 화면에서는 Prometheus Alert, Log Query Alert, Metric Alert, Smart Detector Alert 모두 **단일 리스트**로 표시됩니다.
 
 | 확인 가능 항목 (Available Information) | 설명 (Description) |
 |--------------------------------------|---------------------|
@@ -206,11 +206,13 @@ resources
     'microsoft.alertsmanagement/smartdetectoralertrules'
   )
 // (선택) 특정 리소스 그룹으로 범위 한정 — 다른 RG의 rule 제외
+// (선택) 특정 리소스 그룹으로 범위 한정 — 생략하면 구독 전체 조회
 | where resourceGroup =~ 'rg-aks-monitoring-demo'
 | extend alertType = case(
     type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',
     type =~ 'microsoft.insights/scheduledqueryrules',          'LogQuery',
     type =~ 'microsoft.insights/metricalerts',                 'Metric',
+    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',
     'Unknown'
   )
 // Prometheus: Recording Rule Group 제외 (alert 필드가 있는 rule이 1개 이상인 그룹만)
@@ -219,18 +221,23 @@ resources
        and isnotnull(properties.rules[0].alert)
 | extend severity = case(
     alertType == 'Prometheus', tostring(properties.rules[0].severity),
+    alertType == 'SmartDetector', tostring(properties.severity),
     tostring(properties.severity)
   )
-| extend enabled = tostring(properties.enabled)
+| extend enabled = case(
+    alertType == 'SmartDetector', tostring(properties.state),
+    tostring(properties.enabled)
+  )
 | extend displayName = case(
     alertType == 'Prometheus', name,
     coalesce(tostring(properties.displayName), name)
   )
 | extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)
 | extend evaluationFrequency = case(
-    alertType == 'Prometheus', tostring(properties.interval),
-    alertType == 'LogQuery',   tostring(properties.evaluationFrequency),
-    alertType == 'Metric',     tostring(properties.evaluationFrequency),
+    alertType == 'Prometheus',     tostring(properties.interval),
+    alertType == 'LogQuery',       tostring(properties.evaluationFrequency),
+    alertType == 'Metric',         tostring(properties.evaluationFrequency),
+    alertType == 'SmartDetector',  tostring(properties.frequency),
     ''
   )
 | project displayName, alertType, severity, enabled, ruleCount,
@@ -248,11 +255,13 @@ resources
     'microsoft.insights/metricalerts',
     'microsoft.alertsmanagement/smartdetectoralertrules'
   )
+// (선택) 특정 리소스 그룹으로 범위 한정 — 생략하면 구독 전체 조회
 | where resourceGroup =~ 'rg-aks-monitoring-demo'
 | extend alertType = case(
     type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',
     type =~ 'microsoft.insights/scheduledqueryrules',          'LogQuery',
     type =~ 'microsoft.insights/metricalerts',                 'Metric',
+    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',
     'Unknown'
   )
 | mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))
@@ -277,7 +286,7 @@ resources
 | order by alertType asc, severity asc
 ```
 
-> 이 쿼리를 실행하면 Prometheus Alert 12개 + Log Query 4개 + Metric 1개 = **총 17개 Alert Rule**만 정확히 표시됩니다.
+> 이 쿼리를 실행하면 Prometheus Alert 12개 + Log Query 4개 + Metric 1개 + Smart Detector 2개 = **총 19개 Alert Rule**이 표시됩니다.
 > Recording Rule Group(6개)과 다른 리소스 그룹의 무관한 Alert은 제외됩니다.
 
 #### CLI로 실행 (Run via Azure CLI)
@@ -312,11 +321,32 @@ az graph query -q "resources \
 ### 대안 2: Azure Workbook
 
 Azure Monitor Workbook을 활용하면 **시각적으로 풍부한 통합 대시보드**를 구성할 수 있습니다.
+본 환경에는 바로 사용 가능한 Workbook 템플릿(`monitoring/workbooks/aks-alert-monitoring-workbook.json`)이 포함되어 있습니다.
 
-1. `Monitor → Workbooks → New` 에서 새 Workbook 생성
-2. **Azure Resource Graph** 데이터 소스를 선택하고 위 쿼리를 삽입
-3. 유형별 필터, Severity 히트맵, 활성화/비활성화 현황 등을 시각화
-4. 팀별로 공유 가능한 대시보드 완성
+#### Workbook 구성 (3개 탭)
+
+| 탭 (Tab) | 내용 (Content) |
+|----------|---------------|
+| **📋 개요 (Overview)** | 유형별/Severity별 원형 그래프, 아키텍처 설명 |
+| **📐 Alert Rules (통합 조회)** | 리소스 유형별 개별 테이블 (Prometheus / Log Query / Metric / Smart Detector) |
+| **🔥 Fired Alerts** | 실시간 발생 알림 현황, Severity/State 요약 |
+
+#### 주요 기능
+
+- **Resource Group 필터**: `All (Subscription)` 선택 시 구독 전체 조회, 특정 RG 선택 시 해당 RG만 조회
+- **리소스 유형별 개별 테이블**: 각 타입에 맞는 고유 컬럼 표시
+  - 🟠 Prometheus: PromQL Expression, Rule Group, For
+  - 🔵 Log Query: KQL Query, Frequency, Window
+  - 🟢 Metric: Metric, Condition, Scope
+  - 🟣 Smart Detector: Detector, State, Scope
+- **Severity 컬러코딩, 필터, Excel 내보내기** 지원
+
+#### 임포트 방법 (How to Import)
+
+1. Azure Portal → **Monitor → Workbooks → New**
+2. **Advanced Editor** (`</>` 아이콘) 클릭
+3. `monitoring/workbooks/aks-alert-monitoring-workbook.json` 내용을 붙여넣기
+4. **Apply → Done Editing → Save**
 
 **장점**: Portal 내 네이티브 환경, 팀 공유 용이, 자동 새로고침  
 **적합한 경우**: 운영팀이 주기적으로 규칙 현황을 리뷰할 때
@@ -343,30 +373,30 @@ Managed Grafana에서 **Azure Resource Graph** 데이터 소스를 추가하면
                           │   (규칙 관리)             │
                           └────────┬────────────────┘
                                    │
-              ┌────────────────────┼────────────────────┐
-              ▼                    ▼                     ▼
-   ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-   │ Prometheus Rule   │ │ Scheduled Query  │ │ Metric Alert     │
-   │ Groups            │ │ Rules (Log)      │ │ Rules            │
-   │                   │ │                  │ │                  │
-   │ Portal: Monitor → │ │ Portal: Monitor →│ │ Portal: Monitor →│
-   │ Prometheus rule   │ │ Alert rules      │ │ Alert rules      │
-   │ groups            │ │                  │ │                  │
-   └────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘
-            │                    │                     │
-            │        ┌───────────┘                     │
-            ▼        ▼                                 ▼
-   ┌────────────────────────────────────────────────────────────┐
-   │              Azure Monitor → Alerts                        │
-   │              (발생한 Alert 통합 조회 / Unified Fired View)   │
-   └────────────────────────────────────────────────────────────┘
+          ┌──────────────┬─────────┼──────────┬──────────────────┐
+          ▼              ▼         ▼          ▼                  │
+┌────────────────┐ ┌──────────┐ ┌────────┐ ┌────────────────┐   │
+│ Prometheus Rule│ │ Scheduled│ │ Metric │ │ Smart Detector │   │
+│ Groups         │ │ Query    │ │ Alert  │ │ Alert Rules    │   │
+│                │ │ Rules    │ │ Rules  │ │                │   │
+│ Monitor →      │ │ Monitor →│ │Monitor→│ │ Monitor →      │   │
+│ Prometheus rule│ │ Alert    │ │ Alert  │ │ Alert rules    │   │
+│ groups         │ │ rules    │ │ rules  │ │                │   │
+└───────┬────────┘ └────┬─────┘ └───┬────┘ └───────┬────────┘   │
+        │               │          │               │            │
+        │        ┌──────┘          │               │            │
+        ▼        ▼                 ▼               ▼            │
+┌───────────────────────────────────────────────────────────────┐
+│              Azure Monitor → Alerts                            │
+│              (발생한 Alert 통합 조회 / Unified Fired View)       │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 | 구분 (Category) | 현황 (Current State) | 대안 (Alternative) |
 |-----------------|---------------------|-------------------|
 | **발생한 Alert 조회** (Fired Alerts) | ✅ `Monitor → Alerts` 한 화면에서 통합 조회 가능 | - |
-| **Alert Rule 조회** (Alert Rules) | ⚠️ Prometheus Rule Group은 별도 메뉴 | ✅ Resource Graph 쿼리로 통합 조회 |
-| **Alert Rule 시각화** (Rule Visualization) | ⚠️ 유형별 분산 | ✅ Workbook 또는 Grafana 대시보드 |
+| **Alert Rule 조회** (Alert Rules) | ⚠️ Prometheus Rule Group / Smart Detector는 별도 메뉴 | ✅ Resource Graph 쿼리로 통합 조회 |
+| **Alert Rule 시각화** (Rule Visualization) | ⚠️ 유형별 분산 | ✅ Workbook (리소스 유형별 테이블) 또는 Grafana |
 
 ---
 
@@ -403,3 +433,13 @@ Managed Grafana에서 **Azure Resource Graph** 데이터 소스를 추가하면
 | Alert Name | Severity | 메트릭 (Metric) | 임계값 (Threshold) |
 |-----------|----------|-----------------|-------------------|
 | `alert-aks-cluster-health` | Sev 1 | node_cpu_usage_percentage | > 80% (5m avg) |
+
+### Smart Detector Alert Rules (2 rules)
+
+| Alert Name | Severity | Detector | Scope |
+|-----------|----------|----------|-------|
+| `Failure Anomalies - 273483f8-...` | Sev4 | FailureAnomaliesDetector | Application Insights |
+| `Failure Anomalies - aiappinsightstest` | Sev4 | FailureAnomaliesDetector | Application Insights |
+
+> **참고**: Smart Detector 규칙은 Application Insights가 있는 리소스 그룹(`aoaitest`)에 위치합니다.
+> AKS 리소스 그룹과 다를 수 있으므로, Workbook에서 `All (Subscription)` 옵션을 사용하여 조회하세요.
