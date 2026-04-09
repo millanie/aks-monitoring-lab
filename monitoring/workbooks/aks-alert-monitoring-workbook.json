@@ -35,7 +35,7 @@
             "label": "Resource Group",
             "type": 2,
             "isRequired": false,
-            "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| distinct resourceGroup\n| project label = resourceGroup, value = resourceGroup\n| union (print label = '🌐 All (Subscription)', value = '')\n| order by iff(label startswith '🌐', '', label) asc",
+            "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| distinct resourceGroup\n| project label = resourceGroup, value = resourceGroup\n| union (datatable(label:string, value:string)['All (Subscription)', ''])\n| order by value asc",
             "crossComponentResources": [
               "{Subscription}"
             ],
