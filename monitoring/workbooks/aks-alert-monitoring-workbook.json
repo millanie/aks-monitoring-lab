@@ -34,19 +34,17 @@
             "name": "ResourceGroup",
             "label": "Resource Group",
             "type": 2,
-            "isRequired": true,
-            "query": "resources\n| where type =~ 'microsoft.containerservice/managedclusters'\n| project resourceGroup\n| distinct resourceGroup\n| order by resourceGroup asc",
+            "isRequired": false,
+            "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| distinct resourceGroup\n| project label = resourceGroup, value = resourceGroup\n| union (print label = '🌐 All (Subscription)', value = '')\n| order by iff(label startswith '🌐', '', label) asc",
             "crossComponentResources": [
               "{Subscription}"
             ],
             "typeSettings": {
-              "additionalResourceOptions": [
-                "value::all"
-              ],
+              "additionalResourceOptions": [],
               "showDefault": false
             },
             "queryType": 1,
-            "value": "value::all"
+            "value": ""
           },
           {
             "id": "param-selectedtab",
@@ -124,7 +122,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where '{ResourceGroup}' == 'value::all' or resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize Rules = sum(ruleCount) by alertType",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where isempty('{ResourceGroup}') or resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize Rules = sum(ruleCount) by alertType",
               "size": 3,
               "title": "Alert Rule 유형별 분포 (Distribution by Type)",
               "queryType": 1,
@@ -161,7 +159,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where '{ResourceGroup}' == 'value::all' or resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend severity = case(\n    alertType == 'SmartDetector', tostring(properties.severity),\n    alertType == 'Prometheus', strcat('Sev ', tostring(rule.severity)),\n    strcat('Sev ', tostring(toint(properties.severity)))\n  )\n| summarize Rules = count() by severity\n| order by severity asc",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where isempty('{ResourceGroup}') or resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend severity = case(\n    alertType == 'SmartDetector', tostring(properties.severity),\n    alertType == 'Prometheus', strcat('Sev ', tostring(rule.severity)),\n    strcat('Sev ', tostring(toint(properties.severity)))\n  )\n| summarize Rules = count() by severity\n| order by severity asc",
               "size": 3,
               "title": "Alert Rule Severity 분포 (Distribution by Severity)",
               "queryType": 1,
@@ -224,7 +222,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where '{ResourceGroup}' == 'value::all' or resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize Groups = count(), Rules = sum(ruleCount) by alertType\n| order by alertType asc",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where isempty('{ResourceGroup}') or resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize Groups = count(), Rules = sum(ruleCount) by alertType\n| order by alertType asc",
               "size": 4,
               "title": "유형별 요약 (Summary by Type)",
               "queryType": 1,
@@ -275,7 +273,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.alertsmanagement/prometheusrulegroups'\n| where '{ResourceGroup}' == 'value::all' or resourceGroup =~ '{ResourceGroup}'\n| where array_length(properties.rules) > 0 and isnotnull(properties.rules[0].alert)\n| mv-expand rule = properties.rules\n| where isnotempty(tostring(rule.alert))\n| extend severity = toint(rule.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| project\n    ['Alert Name'] = tostring(rule.alert),\n    ['Severity'] = sevLabel,\n    ['Category'] = tostring(rule.labels.category),\n    ['Rule Group'] = name,\n    ['For'] = tostring(rule['for']),\n    ['PromQL Expression'] = tostring(rule.expression)\n| order by ['Rule Group'] asc, ['Severity'] asc",
+              "query": "resources\n| where type =~ 'microsoft.alertsmanagement/prometheusrulegroups'\n| where isempty('{ResourceGroup}') or resourceGroup =~ '{ResourceGroup}'\n| where array_length(properties.rules) > 0 and isnotnull(properties.rules[0].alert)\n| mv-expand rule = properties.rules\n| where isnotempty(tostring(rule.alert))\n| extend severity = toint(rule.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| project\n    ['Alert Name'] = tostring(rule.alert),\n    ['Severity'] = sevLabel,\n    ['Category'] = tostring(rule.labels.category),\n    ['Rule Group'] = name,\n    ['For'] = tostring(rule['for']),\n    ['PromQL Expression'] = tostring(rule.expression)\n| order by ['Rule Group'] asc, ['Severity'] asc",
               "size": 0,
               "showAnalytics": true,
               "title": "Prometheus Alert Rules",
@@ -344,7 +342,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.insights/scheduledqueryrules'\n| where '{ResourceGroup}' == 'value::all' or resourceGroup =~ '{ResourceGroup}'\n| extend severity = toint(properties.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| extend enabled = tostring(properties.enabled)\n| project\n    ['Alert Name'] = coalesce(tostring(properties.displayName), name),\n    ['Severity'] = sevLabel,\n    ['Enabled'] = enabled,\n    ['Frequency'] = tostring(properties.evaluationFrequency),\n    ['Window'] = tostring(properties.windowSize),\n    ['KQL Query'] = tostring(properties.criteria.allOf[0].query)\n| order by ['Severity'] asc",
+              "query": "resources\n| where type =~ 'microsoft.insights/scheduledqueryrules'\n| where isempty('{ResourceGroup}') or resourceGroup =~ '{ResourceGroup}'\n| extend severity = toint(properties.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| extend enabled = tostring(properties.enabled)\n| project\n    ['Alert Name'] = coalesce(tostring(properties.displayName), name),\n    ['Severity'] = sevLabel,\n    ['Enabled'] = enabled,\n    ['Frequency'] = tostring(properties.evaluationFrequency),\n    ['Window'] = tostring(properties.windowSize),\n    ['KQL Query'] = tostring(properties.criteria.allOf[0].query)\n| order by ['Severity'] asc",
               "size": 0,
               "showAnalytics": true,
               "title": "Log Query Alert Rules (Scheduled Query Rules)",
@@ -439,7 +437,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.insights/metricalerts'\n| where '{ResourceGroup}' == 'value::all' or resourceGroup =~ '{ResourceGroup}'\n| extend severity = toint(properties.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| extend enabled = tostring(properties.enabled)\n| extend metricName = tostring(properties.criteria.allOf[0].metricName)\n| extend metricOperator = tostring(properties.criteria.allOf[0].operator)\n| extend threshold = tostring(properties.criteria.allOf[0].threshold)\n| extend aggregation = tostring(properties.criteria.allOf[0].timeAggregation)\n| project\n    ['Alert Name'] = name,\n    ['Severity'] = sevLabel,\n    ['Enabled'] = enabled,\n    ['Metric'] = metricName,\n    ['Condition'] = strcat(aggregation, ' ', metricOperator, ' ', threshold),\n    ['Frequency'] = tostring(properties.evaluationFrequency),\n    ['Window'] = tostring(properties.windowSize),\n    ['Scope'] = tostring(properties.scopes[0])\n| order by ['Severity'] asc",
+              "query": "resources\n| where type =~ 'microsoft.insights/metricalerts'\n| where isempty('{ResourceGroup}') or resourceGroup =~ '{ResourceGroup}'\n| extend severity = toint(properties.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| extend enabled = tostring(properties.enabled)\n| extend metricName = tostring(properties.criteria.allOf[0].metricName)\n| extend metricOperator = tostring(properties.criteria.allOf[0].operator)\n| extend threshold = tostring(properties.criteria.allOf[0].threshold)\n| extend aggregation = tostring(properties.criteria.allOf[0].timeAggregation)\n| project\n    ['Alert Name'] = name,\n    ['Severity'] = sevLabel,\n    ['Enabled'] = enabled,\n    ['Metric'] = metricName,\n    ['Condition'] = strcat(aggregation, ' ', metricOperator, ' ', threshold),\n    ['Frequency'] = tostring(properties.evaluationFrequency),\n    ['Window'] = tostring(properties.windowSize),\n    ['Scope'] = tostring(properties.scopes[0])\n| order by ['Severity'] asc",
               "size": 0,
               "showAnalytics": true,
               "title": "Metric Alert Rules",
@@ -527,7 +525,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.alertsmanagement/smartdetectoralertrules'\n| where '{ResourceGroup}' == 'value::all' or resourceGroup =~ '{ResourceGroup}'\n| project\n    ['Alert Name'] = coalesce(tostring(properties.displayName), name),\n    ['Severity'] = tostring(properties.severity),\n    ['State'] = tostring(properties.state),\n    ['Detector'] = tostring(properties.detector.id),\n    ['Frequency'] = tostring(properties.frequency),\n    ['Scope'] = tostring(properties.scope[0]),\n    ['Resource Group'] = resourceGroup\n| order by ['Severity'] asc",
+              "query": "resources\n| where type =~ 'microsoft.alertsmanagement/smartdetectoralertrules'\n| where isempty('{ResourceGroup}') or resourceGroup =~ '{ResourceGroup}'\n| project\n    ['Alert Name'] = coalesce(tostring(properties.displayName), name),\n    ['Severity'] = tostring(properties.severity),\n    ['State'] = tostring(properties.state),\n    ['Detector'] = tostring(properties.detector.id),\n    ['Frequency'] = tostring(properties.frequency),\n    ['Scope'] = tostring(properties.scope[0]),\n    ['Resource Group'] = resourceGroup\n| order by ['Severity'] asc",
               "size": 0,
               "showAnalytics": true,
               "title": "Smart Detector Alert Rules",
@@ -642,7 +640,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "alertsmanagementresources\n| where type =~ 'microsoft.alertsmanagement/alerts'\n| where '{ResourceGroup}' == 'value::all' or properties.essentials.targetResourceGroup =~ '{ResourceGroup}'\n| extend severity = tostring(properties.essentials.severity)\n| extend alertState = tostring(properties.essentials.alertState)\n| extend monitorCondition = tostring(properties.essentials.monitorCondition)\n| summarize Count = count() by severity, alertState\n| order by severity asc, alertState asc",
+              "query": "alertsmanagementresources\n| where type =~ 'microsoft.alertsmanagement/alerts'\n| where isempty('{ResourceGroup}') or properties.essentials.targetResourceGroup =~ '{ResourceGroup}'\n| extend severity = tostring(properties.essentials.severity)\n| extend alertState = tostring(properties.essentials.alertState)\n| extend monitorCondition = tostring(properties.essentials.monitorCondition)\n| summarize Count = count() by severity, alertState\n| order by severity asc, alertState asc",
               "size": 4,
               "title": "Severity × 상태 요약 (Severity × State)",
               "queryType": 1,
@@ -675,7 +673,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "alertsmanagementresources\n| where type =~ 'microsoft.alertsmanagement/alerts'\n| where '{ResourceGroup}' == 'value::all' or properties.essentials.targetResourceGroup =~ '{ResourceGroup}'\n| extend alertName = tostring(properties.essentials.alertRule)\n| extend severity = tostring(properties.essentials.severity)\n| extend signalType = tostring(properties.essentials.signalType)\n| extend monitorService = tostring(properties.essentials.monitorService)\n| extend monitorCondition = tostring(properties.essentials.monitorCondition)\n| extend alertState = tostring(properties.essentials.alertState)\n| extend firedTime = todatetime(properties.essentials.startDateTime)\n| extend targetResource = tostring(properties.essentials.targetResource)\n| extend description = tostring(properties.essentials.description)\n| project\n    ['Alert Name'] = alertName,\n    ['Severity'] = severity,\n    ['Signal Type'] = signalType,\n    ['Monitor Service'] = monitorService,\n    ['Condition'] = monitorCondition,\n    ['State'] = alertState,\n    ['Fired Time'] = firedTime,\n    ['Target Resource'] = targetResource,\n    ['Description'] = description,\n    id\n| order by ['Fired Time'] desc",
+              "query": "alertsmanagementresources\n| where type =~ 'microsoft.alertsmanagement/alerts'\n| where isempty('{ResourceGroup}') or properties.essentials.targetResourceGroup =~ '{ResourceGroup}'\n| extend alertName = tostring(properties.essentials.alertRule)\n| extend severity = tostring(properties.essentials.severity)\n| extend signalType = tostring(properties.essentials.signalType)\n| extend monitorService = tostring(properties.essentials.monitorService)\n| extend monitorCondition = tostring(properties.essentials.monitorCondition)\n| extend alertState = tostring(properties.essentials.alertState)\n| extend firedTime = todatetime(properties.essentials.startDateTime)\n| extend targetResource = tostring(properties.essentials.targetResource)\n| extend description = tostring(properties.essentials.description)\n| project\n    ['Alert Name'] = alertName,\n    ['Severity'] = severity,\n    ['Signal Type'] = signalType,\n    ['Monitor Service'] = monitorService,\n    ['Condition'] = monitorCondition,\n    ['State'] = alertState,\n    ['Fired Time'] = firedTime,\n    ['Target Resource'] = targetResource,\n    ['Description'] = description,\n    id\n| order by ['Fired Time'] desc",
               "size": 0,
               "showAnalytics": true,
               "title": "발생한 Alert 목록 (All Fired Alerts)",
