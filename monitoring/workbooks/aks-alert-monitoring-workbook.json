@@ -140,10 +140,22 @@
               "visualization": "piechart",
               "chartSettings": {
                 "seriesLabelSettings": [
-                  { "seriesName": "Prometheus", "color": "orange" },
-                  { "seriesName": "LogQuery", "color": "blue" },
-                  { "seriesName": "Metric", "color": "green" },
-                  { "seriesName": "SmartDetector", "color": "purple" }
+                  {
+                    "seriesName": "Prometheus",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "LogQuery",
+                    "color": "blue"
+                  },
+                  {
+                    "seriesName": "Metric",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "SmartDetector",
+                    "color": "purple"
+                  }
                 ]
               }
             },
@@ -165,11 +177,26 @@
               "visualization": "piechart",
               "chartSettings": {
                 "seriesLabelSettings": [
-                  { "seriesName": "Sev 0 - Critical", "color": "redBright" },
-                  { "seriesName": "Sev 1 - Error", "color": "red" },
-                  { "seriesName": "Sev 2 - Warning", "color": "orange" },
-                  { "seriesName": "Sev 3 - Informational", "color": "yellow" },
-                  { "seriesName": "Sev 4 - Verbose", "color": "gray" }
+                  {
+                    "seriesName": "Sev 0 - Critical",
+                    "color": "redBright"
+                  },
+                  {
+                    "seriesName": "Sev 1 - Error",
+                    "color": "red"
+                  },
+                  {
+                    "seriesName": "Sev 2 - Warning",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "Sev 3 - Informational",
+                    "color": "yellow"
+                  },
+                  {
+                    "seriesName": "Sev 4 - Verbose",
+                    "color": "gray"
+                  }
                 ]
               }
             },
@@ -194,7 +221,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## 📐 Alert Rules 통합 조회\nPrometheus Rule Group, Log Query Rule, Metric Alert을 **하나의 테이블**에서 조회합니다.\n\n> ⚠️ Managed Prometheus 활성화 시 자동 생성되는 Recording Rule Group은 필터링되어 제외됩니다."
+              "json": "## 📐 Alert Rules 리소스 유형별 조회\n각 리소스 타입별로 **개별 테이블**을 제공합니다. Recording Rule Group은 자동 제외됩니다."
             },
             "name": "rules-header"
           },
@@ -202,7 +229,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize\n    Groups = count(),\n    Rules = sum(ruleCount)\n  by alertType\n| order by alertType asc",
+              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| where alertType != 'Prometheus'\n    or (array_length(properties.rules) > 0\n       and isnotnull(properties.rules[0].alert))\n| extend ruleCount = iff(alertType == 'Prometheus', array_length(properties.rules), 1)\n| summarize Groups = count(), Rules = sum(ruleCount) by alertType\n| order by alertType asc",
               "size": 4,
               "title": "유형별 요약 (Summary by Type)",
               "queryType": 1,
@@ -245,18 +272,18 @@
           {
             "type": 1,
             "content": {
-              "json": "### 전체 Alert Rule 목록 (All Alert Rules — Expanded View)"
+              "json": "---\n### 🟠 Prometheus Alert Rules\n`Microsoft.AlertsManagement/prometheusRuleGroups` — PromQL 기반 시계열 메트릭 알림"
             },
-            "name": "rules-table-header"
+            "name": "prom-header"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend ruleName = case(\n    alertType == 'Prometheus', tostring(rule.alert),\n    alertType == 'LogQuery',   coalesce(tostring(properties.displayName), name),\n    alertType == 'Metric',     name,\n    alertType == 'SmartDetector', coalesce(tostring(properties.displayName), name),\n    name\n  )\n| extend severity = toint(coalesce(rule.severity, properties.severity))\n| extend sevLabel = case(\n    severity == 0, '🔴 Sev 0',\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    severity == 4, '⚪ Sev 4',\n    strcat('Sev ', tostring(severity))\n  )\n| extend ruleGroup = name\n| extend expression = case(\n    alertType == 'Prometheus', tostring(rule.expression),\n    alertType == 'LogQuery',   tostring(properties.criteria.allOf[0].query),\n    alertType == 'Metric',     tostring(properties.criteria.allOf[0].metricName),\n    alertType == 'SmartDetector', tostring(properties.detector.id),\n    ''\n  )\n| extend forDuration = case(\n    alertType == 'Prometheus', tostring(rule['for']),\n    alertType == 'LogQuery',   tostring(properties.evaluationFrequency),\n    alertType == 'Metric',     tostring(properties.evaluationFrequency),\n    alertType == 'SmartDetector', tostring(properties.frequency),\n    ''\n  )\n| extend category = case(\n    alertType == 'Prometheus', tostring(rule.labels.category),\n    alertType == 'LogQuery',   tostring(properties.actions.customProperties.alert_source),\n    alertType == 'Metric',     'platform',\n    alertType == 'SmartDetector', 'smart-detection',\n    ''\n  )\n| project\n    ['Alert Rule'] = ruleName,\n    ['Type'] = alertType,\n    ['Severity'] = sevLabel,\n    ['Category'] = category,\n    ['Group/Resource'] = ruleGroup,\n    ['For/Frequency'] = forDuration,\n    ['Expression/Query'] = expression\n| order by ['Type'] asc, ['Severity'] asc",
+              "query": "resources\n| where type =~ 'microsoft.alertsmanagement/prometheusrulegroups'\n| where resourceGroup =~ '{ResourceGroup}'\n| where array_length(properties.rules) > 0 and isnotnull(properties.rules[0].alert)\n| mv-expand rule = properties.rules\n| where isnotempty(tostring(rule.alert))\n| extend severity = toint(rule.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| project\n    ['Alert Name'] = tostring(rule.alert),\n    ['Severity'] = sevLabel,\n    ['Category'] = tostring(rule.labels.category),\n    ['Rule Group'] = name,\n    ['For'] = tostring(rule['for']),\n    ['PromQL Expression'] = tostring(rule.expression)\n| order by ['Rule Group'] asc, ['Severity'] asc",
               "size": 0,
               "showAnalytics": true,
-              "title": "Alert Rules (Prometheus + Log Query + Metric)",
+              "title": "Prometheus Alert Rules",
               "showExportToExcel": true,
               "queryType": 1,
               "resourceType": "microsoft.resourcegraph/resources",
@@ -267,78 +294,320 @@
               "gridSettings": {
                 "formatters": [
                   {
-                    "columnMatch": "Type",
-                    "formatter": 18,
-                    "formatOptions": {
-                      "thresholdsOptions": "colors",
-                      "thresholdsGrid": [
-                        { "operator": "==", "thresholdValue": "Prometheus", "representation": "orange", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "LogQuery", "representation": "blue", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "Metric", "representation": "green", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "SmartDetector", "representation": "purple", "text": "{0}" },
-                        { "operator": "Default", "representation": "gray", "text": "{0}" }
-                      ]
-                    }
-                  },
-                  {
                     "columnMatch": "Severity",
                     "formatter": 18,
                     "formatOptions": {
                       "thresholdsOptions": "colors",
                       "thresholdsGrid": [
-                        { "operator": "contains", "thresholdValue": "Sev 0", "representation": "redBright", "text": "{0}" },
-                        { "operator": "contains", "thresholdValue": "Sev 1", "representation": "red", "text": "{0}" },
-                        { "operator": "contains", "thresholdValue": "Sev 2", "representation": "orange", "text": "{0}" },
-                        { "operator": "contains", "thresholdValue": "Sev 3", "representation": "yellow", "text": "{0}" },
-                        { "operator": "Default", "representation": "gray", "text": "{0}" }
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 1",
+                          "representation": "red",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 2",
+                          "representation": "orange",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 3",
+                          "representation": "yellow",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "gray",
+                          "text": "{0}"
+                        }
                       ]
                     }
                   },
                   {
-                    "columnMatch": "Expression/Query",
+                    "columnMatch": "PromQL Expression",
                     "formatter": 1,
                     "formatOptions": {
                       "customColumnWidthSetting": "40%"
                     }
                   }
                 ],
-                "filter": true,
-                "sortBy": [
-                  { "itemKey": "Type", "sortOrder": 1 }
-                ]
+                "filter": true
               }
             },
-            "name": "rules-expanded-table"
+            "name": "prom-table"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "---\n### 🔵 Log Query Alert Rules (Scheduled Query Rules)\n`Microsoft.Insights/scheduledQueryRules` — KQL 기반 로그 쿼리 알림"
+            },
+            "name": "log-header"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type in~ (\n    'microsoft.alertsmanagement/prometheusrulegroups',\n    'microsoft.insights/scheduledqueryrules',\n    'microsoft.insights/metricalerts',\n    'microsoft.alertsmanagement/smartdetectoralertrules'\n  )\n| where resourceGroup =~ '{ResourceGroup}'\n| extend alertType = case(\n    type =~ 'microsoft.alertsmanagement/prometheusrulegroups', 'Prometheus',\n    type =~ 'microsoft.insights/scheduledqueryrules', 'LogQuery',\n    type =~ 'microsoft.insights/metricalerts', 'Metric',\n    type =~ 'microsoft.alertsmanagement/smartdetectoralertrules', 'SmartDetector',\n    'Unknown'\n  )\n| mv-expand rule = iff(alertType == 'Prometheus', properties.rules, pack_array(properties))\n| where alertType != 'Prometheus' or isnotempty(tostring(rule.alert))\n| extend severity = toint(coalesce(rule.severity, properties.severity))\n| extend sevLabel = case(\n    severity == 0, 'Sev 0',\n    severity == 1, 'Sev 1',\n    severity == 2, 'Sev 2',\n    severity == 3, 'Sev 3',\n    severity == 4, 'Sev 4',\n    strcat('Sev ', tostring(severity))\n  )\n| summarize Count = count() by alertType, sevLabel\n| order by alertType asc, sevLabel asc",
+              "query": "resources\n| where type =~ 'microsoft.insights/scheduledqueryrules'\n| where resourceGroup =~ '{ResourceGroup}'\n| extend severity = toint(properties.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| extend enabled = tostring(properties.enabled)\n| project\n    ['Alert Name'] = coalesce(tostring(properties.displayName), name),\n    ['Severity'] = sevLabel,\n    ['Enabled'] = enabled,\n    ['Frequency'] = tostring(properties.evaluationFrequency),\n    ['Window'] = tostring(properties.windowSize),\n    ['KQL Query'] = tostring(properties.criteria.allOf[0].query)\n| order by ['Severity'] asc",
               "size": 0,
-              "title": "유형 × Severity 히트맵 (Type × Severity Matrix)",
+              "showAnalytics": true,
+              "title": "Log Query Alert Rules (Scheduled Query Rules)",
+              "showExportToExcel": true,
               "queryType": 1,
               "resourceType": "microsoft.resourcegraph/resources",
               "crossComponentResources": [
                 "{Subscription}"
               ],
-              "visualization": "categoricalbar",
-              "chartSettings": {
-                "xAxis": "alertType",
-                "group": "sevLabel",
-                "seriesLabelSettings": [
-                  { "seriesName": "Sev 0", "color": "redBright" },
-                  { "seriesName": "Sev 1", "color": "red" },
-                  { "seriesName": "Sev 2", "color": "orange" },
-                  { "seriesName": "Sev 3", "color": "yellow" },
-                  { "seriesName": "Sev 4", "color": "gray" }
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Severity",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 1",
+                          "representation": "red",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 2",
+                          "representation": "orange",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 3",
+                          "representation": "yellow",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "gray",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "Enabled",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "true",
+                          "representation": "success",
+                          "text": "Yes"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "false",
+                          "representation": "disabled",
+                          "text": "No"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "KQL Query",
+                    "formatter": 1,
+                    "formatOptions": {
+                      "customColumnWidthSetting": "40%"
+                    }
+                  }
                 ],
-                "ySettings": {
-                  "min": 0
-                }
+                "filter": true
               }
             },
-            "name": "rules-heatmap"
+            "name": "log-table"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "---\n### 🟢 Metric Alert Rules\n`Microsoft.Insights/metricAlerts` — ARM 플랫폼 메트릭 기반 알림"
+            },
+            "name": "metric-header"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "resources\n| where type =~ 'microsoft.insights/metricalerts'\n| where resourceGroup =~ '{ResourceGroup}'\n| extend severity = toint(properties.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| extend enabled = tostring(properties.enabled)\n| extend metricName = tostring(properties.criteria.allOf[0].metricName)\n| extend metricOperator = tostring(properties.criteria.allOf[0].operator)\n| extend threshold = tostring(properties.criteria.allOf[0].threshold)\n| extend aggregation = tostring(properties.criteria.allOf[0].timeAggregation)\n| project\n    ['Alert Name'] = name,\n    ['Severity'] = sevLabel,\n    ['Enabled'] = enabled,\n    ['Metric'] = metricName,\n    ['Condition'] = strcat(aggregation, ' ', metricOperator, ' ', threshold),\n    ['Frequency'] = tostring(properties.evaluationFrequency),\n    ['Window'] = tostring(properties.windowSize),\n    ['Scope'] = tostring(properties.scopes[0])\n| order by ['Severity'] asc",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Metric Alert Rules",
+              "showExportToExcel": true,
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
+              "crossComponentResources": [
+                "{Subscription}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Severity",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 1",
+                          "representation": "red",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 2",
+                          "representation": "orange",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 3",
+                          "representation": "yellow",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "gray",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "Enabled",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "true",
+                          "representation": "success",
+                          "text": "Yes"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "false",
+                          "representation": "disabled",
+                          "text": "No"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            },
+            "name": "metric-table"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "---\n### 🟣 Smart Detector Alert Rules\n`Microsoft.AlertsManagement/smartDetectorAlertRules` — Application Insights AI/ML 기반 이상 탐지 알림"
+            },
+            "name": "smart-header"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "resources\n| where type =~ 'microsoft.alertsmanagement/smartdetectoralertrules'\n| where resourceGroup =~ '{ResourceGroup}'\n| extend severity = toint(properties.severity)\n| extend sevLabel = case(\n    severity == 1, '🔴 Sev 1',\n    severity == 2, '🟠 Sev 2',\n    severity == 3, '🟡 Sev 3',\n    strcat('Sev ', tostring(severity))\n  )\n| project\n    ['Alert Name'] = coalesce(tostring(properties.displayName), name),\n    ['Severity'] = sevLabel,\n    ['State'] = tostring(properties.state),\n    ['Detector'] = tostring(properties.detector.id),\n    ['Frequency'] = tostring(properties.frequency),\n    ['Scope'] = tostring(properties.scope[0])\n| order by ['Severity'] asc",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Smart Detector Alert Rules",
+              "showExportToExcel": true,
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
+              "crossComponentResources": [
+                "{Subscription}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Severity",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 1",
+                          "representation": "red",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 2",
+                          "representation": "orange",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Sev 3",
+                          "representation": "yellow",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "gray",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "State",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Enabled",
+                          "representation": "success",
+                          "text": "Enabled"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Disabled",
+                          "representation": "disabled",
+                          "text": "Disabled"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            },
+            "name": "smart-table"
           }
         ]
       },
@@ -418,11 +687,35 @@
                     "formatOptions": {
                       "thresholdsOptions": "colors",
                       "thresholdsGrid": [
-                        { "operator": "==", "thresholdValue": "Sev0", "representation": "redBright", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "Sev1", "representation": "red", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "Sev2", "representation": "orange", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "Sev3", "representation": "yellow", "text": "{0}" },
-                        { "operator": "Default", "representation": "gray", "text": "{0}" }
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Sev0",
+                          "representation": "redBright",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Sev1",
+                          "representation": "red",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Sev2",
+                          "representation": "orange",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Sev3",
+                          "representation": "yellow",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "gray",
+                          "text": "{0}"
+                        }
                       ]
                     }
                   },
@@ -432,11 +725,35 @@
                     "formatOptions": {
                       "thresholdsOptions": "colors",
                       "thresholdsGrid": [
-                        { "operator": "contains", "thresholdValue": "Prometheus", "representation": "orange", "text": "{0}" },
-                        { "operator": "contains", "thresholdValue": "Log", "representation": "blue", "text": "{0}" },
-                        { "operator": "contains", "thresholdValue": "Metric", "representation": "green", "text": "{0}" },
-                        { "operator": "contains", "thresholdValue": "Smart", "representation": "purple", "text": "{0}" },
-                        { "operator": "Default", "representation": "gray", "text": "{0}" }
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Prometheus",
+                          "representation": "orange",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Log",
+                          "representation": "blue",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Metric",
+                          "representation": "green",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "Smart",
+                          "representation": "purple",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "gray",
+                          "text": "{0}"
+                        }
                       ]
                     }
                   },
@@ -446,9 +763,23 @@
                     "formatOptions": {
                       "thresholdsOptions": "icons",
                       "thresholdsGrid": [
-                        { "operator": "==", "thresholdValue": "Fired", "representation": "4", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "Resolved", "representation": "success", "text": "{0}" },
-                        { "operator": "Default", "representation": "unknown", "text": "{0}" }
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Fired",
+                          "representation": "4",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Resolved",
+                          "representation": "success",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
                       ]
                     }
                   },
@@ -458,10 +789,29 @@
                     "formatOptions": {
                       "thresholdsOptions": "colors",
                       "thresholdsGrid": [
-                        { "operator": "==", "thresholdValue": "New", "representation": "red", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "Acknowledged", "representation": "yellow", "text": "{0}" },
-                        { "operator": "==", "thresholdValue": "Closed", "representation": "green", "text": "{0}" },
-                        { "operator": "Default", "representation": "gray", "text": "{0}" }
+                        {
+                          "operator": "==",
+                          "thresholdValue": "New",
+                          "representation": "red",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Acknowledged",
+                          "representation": "yellow",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Closed",
+                          "representation": "green",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "representation": "gray",
+                          "text": "{0}"
+                        }
                       ]
                     }
                   },
@@ -472,7 +822,10 @@
                 ],
                 "filter": true,
                 "sortBy": [
-                  { "itemKey": "Fired Time", "sortOrder": 2 }
+                  {
+                    "itemKey": "Fired Time",
+                    "sortOrder": 2
+                  }
                 ]
               }
             },
